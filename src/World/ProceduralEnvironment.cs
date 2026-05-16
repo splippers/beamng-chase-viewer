@@ -130,9 +130,11 @@ namespace BeamQuest.World
         {
             _globalTime += dt;
 
-            // Fog thickens as threat approaches
-            _targetFog  = MathEx.Lerp(0.015f, 0.18f, threatIntensity);
-            FogDensity  = MathEx.Lerp(FogDensity, _targetFog, dt * 2f);
+            // Counter-intuitive horror tool: fog thickens at safe distance, clears as
+            // threat closes in — you see the thing more clearly the closer it gets.
+            // Dense fog (hiding distance) → thin fog (full clarity at impact range).
+            _targetFog  = MathEx.Lerp(0.15f, 0.008f, threatIntensity);
+            FogDensity  = MathEx.Lerp(FogDensity, _targetFog, dt * 1.5f);
 
             // Lights flicker faster when threat is close
             var lightProps = Props.Where(p => p.Type == PropType.StreetLight).ToList();

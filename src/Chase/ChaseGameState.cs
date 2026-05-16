@@ -52,6 +52,7 @@ namespace BeamQuest.Chase
             {
                 Phase = ChasePhase.Escaped;
                 if (SurvivalSeconds > BestSeconds) BestSeconds = SurvivalSeconds;
+                EventBus.Publish(new ChaseEscapedEvent(SurvivalSeconds));
             }
         }
 

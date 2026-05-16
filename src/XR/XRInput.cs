@@ -32,6 +32,7 @@ namespace BeamQuest.XR
         private Action _triggerAction, _gripAction, _thumbstickAction;
         private Action _buttonAAction, _buttonBAction, _menuAction, _thumbstickClickAction;
         private Action _poseGripAction, _poseAimAction;
+        private Action _hapticLeftAction, _hapticRightAction;
 
         // Spaces for pose actions
         private Space _leftGripSpace, _leftAimSpace;
@@ -74,6 +75,8 @@ namespace BeamQuest.XR
             _thumbstickClickAction = CreateAction("thumbstick_click", ActionType.BooleanInput);
             _poseGripAction      = CreateAction("pose_grip",      ActionType.PoseInput);
             _poseAimAction       = CreateAction("pose_aim",       ActionType.PoseInput);
+            _hapticLeftAction    = CreateAction("haptic_left",    ActionType.VibrationOutput);
+            _hapticRightAction   = CreateAction("haptic_right",   ActionType.VibrationOutput);
         }
 
         private Action CreateAction(string name, ActionType type)
@@ -121,6 +124,8 @@ namespace BeamQuest.XR
                 Bind(_poseGripAction,        "/user/hand/right/input/grip/pose"),
                 Bind(_poseAimAction,         "/user/hand/left/input/aim/pose"),
                 Bind(_poseAimAction,         "/user/hand/right/input/aim/pose"),
+                Bind(_hapticLeftAction,      "/user/hand/left/output/haptic"),
+                Bind(_hapticRightAction,     "/user/hand/right/output/haptic"),
             };
 
             fixed (SuggestedActionBinding* bp = bindings)
@@ -273,6 +278,40 @@ namespace BeamQuest.XR
             fixed (byte* p = bytes)
                 _xr.XrApi.StringToPath(_xr.XrInstance, p, &path);
             return path;
+        }
+
+        // ── Haptics ──────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Apply per-frame rumble to both controllers.
+        /// leftAmplitude / rightAmplitude: 0-1.  durationSeconds: length of this pulse.
+        /// Amplitude below 0.01 stops haptics on that controller.
+        /// </summary>
+        public unsafe void ApplyHapticFeedback(float leftAmplitude, float rightAmplitude, float durationSeconds)
+        {
+            long durationNs = (long)(durationSeconds * 1_000_000_000L);
+            ApplyOrStopHaptic(_hapticLeftAction,  leftAmplitude,  durationNs);
+            ApplyOrStopHaptic(_hapticRightAction, rightAmplitude, durationNs);
+        }
+
+        private unsafe void ApplyOrStopHaptic(Action action, float amplitude, long durationNs)
+        {
+            if (amplitude < 0.01f)
+            {
+                var stopInfo = new HapticActionInfo { Type = StructureType.HapticActionInfo, Action = action };
+                _xr.XrApi.StopHapticFeedback(_xr.XrSessionHandle, &stopInfo);
+                return;
+            }
+
+            var vibration = new HapticVibration
+            {
+                Type      = StructureType.HapticVibration,
+                Amplitude = Math.Clamp(amplitude, 0f, 1f),
+                Duration  = durationNs,
+                Frequency = 0f, // XR_FREQUENCY_UNSPECIFIED — let runtime choose
+            };
+            var info = new HapticActionInfo { Type = StructureType.HapticActionInfo, Action = action };
+            _xr.XrApi.ApplyHapticFeedback(_xr.XrSessionHandle, &info, (HapticBaseHeader*)&vibration);
         }
 
         public void Dispose()

@@ -31,6 +31,7 @@ namespace BeamQuest.Core
     public readonly record struct PlayerCaughtEvent(float SurvivalSeconds);
     public readonly record struct ChaseStartedEvent;
     public readonly record struct ChaseRestartedEvent;
+    public readonly record struct ChaseEscapedEvent(float SurvivalSeconds);
 
     // ── Bus ───────────────────────────────────────────────────────────────────
 
