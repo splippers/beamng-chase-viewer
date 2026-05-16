@@ -11,10 +11,10 @@ echo "=== BeamQuest Viewer build ==="
 if command -v glslc &>/dev/null; then
   echo "Compiling shaders..."
   mkdir -p "$SCRIPT_DIR/shaders/spv"
-  glslc "$SCRIPT_DIR/shaders/vehicle.vert" -o "$SCRIPT_DIR/shaders/spv/vehicle.vert.spv"
-  glslc "$SCRIPT_DIR/shaders/vehicle.frag" -o "$SCRIPT_DIR/shaders/spv/vehicle.frag.spv"
-  glslc "$SCRIPT_DIR/shaders/terrain.vert" -o "$SCRIPT_DIR/shaders/spv/terrain.vert.spv"
-  glslc "$SCRIPT_DIR/shaders/terrain.frag" -o "$SCRIPT_DIR/shaders/spv/terrain.frag.spv"
+  for shader in vehicle.vert vehicle.frag terrain.vert terrain.frag \
+                prop.vert prop.frag vignette.vert vignette.frag; do
+    glslc "$SCRIPT_DIR/shaders/$shader" -o "$SCRIPT_DIR/shaders/spv/$shader.spv"
+  done
 
   # Embed SPIR-V as C# byte arrays
   echo "Generating ShaderBytecode.g.cs..."
@@ -45,3 +45,7 @@ if [ -n "$APK" ] && command -v adb &>/dev/null && adb devices | grep -q "device$
 else
   echo "APK: $APK (not deploying — no device or adb not found)"
 fi
+
+# ── Package BeamNG mod ───────────────────────────────────────────────────────
+echo "Packaging BeamNG mod..."
+bash "$SCRIPT_DIR/tools/package_mod.sh"

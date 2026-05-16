@@ -1,0 +1,10 @@
+{
+  "title": "BeamQuest Bridge",
+  "version": "1.0.0",
+  "description": "Streams all vehicle states to the BeamQuest VR viewer on Meta Quest 3, and receives the Quest player's position to steer the AI chaser vehicle. Enable Chase mode in BeamQuest Viewer, set BQ_QUEST_IP to your Quest 3's IP address.",
+  "author": "BeamQuest",
+  "supportedGames": ["BeamNG.drive"],
+  "type": "mod",
+  "devHelper": false,
+  "tags": ["multiplayer", "vr", "network", "tools"]
+}
