@@ -118,7 +118,7 @@ namespace BeamQuest.Modes
             Threat.Update(Player.Position, dt);
             Audio.Update(dt, HeadRotation);
             Environment.Update(dt, Threat.Intensity);
-            GameState.Update(dt);
+            GameState.Update(dt, Player.Position);
             HUD.Update(dt);
 
             _broadcaster?.Update(dt, Player.Position);

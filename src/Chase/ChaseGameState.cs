@@ -8,7 +8,7 @@ namespace BeamQuest.Chase
     /// <summary>
     /// Tracks the game loop for Chase mode.
     /// Caught = vehicle within ImpactRadius.
-    /// Escaped = surviving BeyondSeconds without impact (optional win condition).
+    /// Escaped = player physically reaches BeaconPosition OR survives EscapeGoalSeconds.
     /// </summary>
     public sealed class ChaseGameState
     {
@@ -19,8 +19,16 @@ namespace BeamQuest.Chase
         public float      BestSeconds     { get; private set; }
         public int        AttemptNumber   { get; private set; }
 
-        // Optional: survive this long to "win" a round
+        // Time-based escape fallback (still active as a secondary win condition)
         public float EscapeGoalSeconds { get; set; } = 180f;
+
+        // Physical escape zone — 4m radius around the beacon
+        private const float EscapeZoneRadius = 4f;
+
+        // Last 5 round durations (survival seconds per round)
+        private readonly Queue<float> _roundHistory = new();
+        private const int HistoryMax = 5;
+        public IReadOnlyCollection<float> RoundHistory => _roundHistory;
 
         // Impact grace period — prevent instant re-catch after restart
         private float _gracePeriod;
@@ -41,26 +49,47 @@ namespace BeamQuest.Chase
             EventBus.Publish(new ChaseStartedEvent());
         }
 
-        public void Update(float dt)
+        public void Update(float dt, Vector3 playerPos)
         {
             if (Phase != ChasePhase.Running) return;
 
             SurvivalSeconds += dt;
             _gracePeriod    -= dt;
 
-            if (SurvivalSeconds >= EscapeGoalSeconds)
+            // Physical escape: player reached the beacon
+            var toBeacon = playerPos - ProceduralEnvironment.BeaconPosition;
+            if (toBeacon.LengthSquared() <= EscapeZoneRadius * EscapeZoneRadius)
             {
-                Phase = ChasePhase.Escaped;
-                if (SurvivalSeconds > BestSeconds) BestSeconds = SurvivalSeconds;
-                EventBus.Publish(new ChaseEscapedEvent(SurvivalSeconds));
+                FinishRound(escaped: true);
+                return;
             }
+
+            // Time-based escape fallback
+            if (SurvivalSeconds >= EscapeGoalSeconds)
+                FinishRound(escaped: true);
+        }
+
+        private void FinishRound(bool escaped)
+        {
+            Phase = escaped ? ChasePhase.Escaped : ChasePhase.Caught;
+            if (SurvivalSeconds > BestSeconds) BestSeconds = SurvivalSeconds;
+            RecordHistory(SurvivalSeconds);
+
+            if (escaped)
+                EventBus.Publish(new ChaseEscapedEvent(SurvivalSeconds));
+        }
+
+        private void RecordHistory(float seconds)
+        {
+            _roundHistory.Enqueue(seconds);
+            while (_roundHistory.Count > HistoryMax)
+                _roundHistory.Dequeue();
         }
 
         private void OnImpact(ThreatImpactEvent e)
         {
             if (Phase != ChasePhase.Running || _gracePeriod > 0) return;
-            Phase = ChasePhase.Caught;
-            if (SurvivalSeconds > BestSeconds) BestSeconds = SurvivalSeconds;
+            FinishRound(escaped: false);
             EventBus.Publish(new PlayerCaughtEvent(SurvivalSeconds));
         }
 

@@ -4,7 +4,7 @@ namespace BeamQuest.World
 {
     public sealed class PropInstance
     {
-        public enum PropType { Barrier, Container, AbandonedCar, ConcreteBlock, StreetLight }
+        public enum PropType { Barrier, Container, AbandonedCar, ConcreteBlock, StreetLight, EscapeBeacon }
 
         public PropType   Type      { get; init; }
         public Transform3D Transform { get; init; }
@@ -32,6 +32,10 @@ namespace BeamQuest.World
         // Target fog density (driven by ThreatTracker intensity)
         private float _targetFog = 0.02f;
         private float _fogBias   = 0f;  // per-profile tweak applied to _targetFog
+
+        // Escape beacon: a fixed landmark the player must physically reach to win.
+        // Placed at the far end of the arena along the +X axis.
+        public static readonly Vector3 BeaconPosition = new(85f, 0f, 0f);
 
         private const float ArenaRadius = 120f;
         private const int   LightCount  = 24;
@@ -125,6 +129,14 @@ namespace BeamQuest.World
                     LightOn   = true,
                 });
             }
+
+            // Escape beacon — single landmark the player must reach to win.
+            Props.Add(new PropInstance
+            {
+                Type      = PropType.EscapeBeacon,
+                Transform = new Transform3D(BeaconPosition, Quaternion.Identity, Vector3.One),
+                LightOn   = true,
+            });
         }
 
         public void SetFogBias(float bias) => _fogBias = bias;
