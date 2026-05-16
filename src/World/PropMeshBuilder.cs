@@ -51,6 +51,32 @@ namespace BeamQuest.World
             => Box(new Vector3(0f, 0.5f, 0f), new Vector3(2f, 1f, 0.5f),
                    new Vector4(0.65f, 0.63f, 0.6f, 1f));
 
+        // ── Escape beacon — tall glowing cyan pillar ───────────────────────────
+        // Visible from anywhere in the arena: wide base → thin shaft → bright cap.
+        // Emissive is driven by DrawProps (LightOn == true by default on the prop).
+        public static (float[] vertices, uint[] indices) EscapeBeacon()
+        {
+            var cyan     = new Vector4(0.05f, 0.95f, 0.85f, 1f);  // bright teal
+            var cyanDim  = new Vector4(0.03f, 0.55f, 0.5f,  1f);  // dim teal for base
+            var white    = new Vector4(0.8f,  1f,    0.95f, 1f);  // near-white cap
+
+            // Base slab: wide platform the player can see from a distance
+            var (bv, bi) = Box(new Vector3(0f, 0.12f, 0f),  new Vector3(2.4f, 0.24f, 2.4f), cyanDim);
+            // Shaft: slim tall pillar
+            var (sv, si) = Box(new Vector3(0f, 5.5f, 0f),   new Vector3(0.22f, 11f, 0.22f), cyan);
+            // Mid ring: horizontal band halfway up for depth cueing
+            var (mv, mi) = Box(new Vector3(0f, 3.5f, 0f),   new Vector3(0.55f, 0.3f, 0.55f), cyan);
+            // Top cap: wide bright disk
+            var (cv, ci) = Box(new Vector3(0f, 11.1f, 0f),  new Vector3(0.9f, 0.4f, 0.9f), white);
+            // Crown ring above the cap — makes it recognisable at max arena range
+            var (cr2v, cr2i) = Box(new Vector3(0f, 11.55f, 0f), new Vector3(0.5f, 0.2f, 0.5f), cyan);
+
+            var (t1, ti1) = Merge(bv, bi, sv, si);
+            var (t2, ti2) = Merge(t1, ti1, mv, mi);
+            var (t3, ti3) = Merge(t2, ti2, cv, ci);
+            return Merge(t3, ti3, cr2v, cr2i);
+        }
+
         // ── Shared box builder ────────────────────────────────────────────────
         private static (float[] vertices, uint[] indices) Box(
             Vector3 center, Vector3 size, Vector4 color)
