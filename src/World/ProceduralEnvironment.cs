@@ -31,6 +31,7 @@ namespace BeamQuest.World
 
         // Target fog density (driven by ThreatTracker intensity)
         private float _targetFog = 0.02f;
+        private float _fogBias   = 0f;  // per-profile tweak applied to _targetFog
 
         private const float ArenaRadius = 120f;
         private const int   LightCount  = 24;
@@ -126,6 +127,8 @@ namespace BeamQuest.World
             }
         }
 
+        public void SetFogBias(float bias) => _fogBias = bias;
+
         public void Update(float dt, float threatIntensity)
         {
             _globalTime += dt;
@@ -133,7 +136,7 @@ namespace BeamQuest.World
             // Counter-intuitive horror tool: fog thickens at safe distance, clears as
             // threat closes in — you see the thing more clearly the closer it gets.
             // Dense fog (hiding distance) → thin fog (full clarity at impact range).
-            _targetFog  = MathEx.Lerp(0.15f, 0.008f, threatIntensity);
+            _targetFog  = MathEx.Lerp(0.15f, 0.008f, threatIntensity) + _fogBias;
             FogDensity  = MathEx.Lerp(FogDensity, _targetFog, dt * 1.5f);
 
             // Lights flicker faster when threat is close

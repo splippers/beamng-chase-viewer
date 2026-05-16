@@ -11,11 +11,13 @@ namespace BeamQuest.World
     {
         private readonly VehicleManager _vehicles;
 
-        // Proximity thresholds (metres)
+        // Proximity thresholds (metres) — TenseRadius overridden by active ThreatProfile
         public const float ImpactRadius   =  2.5f;
         public const float CriticalRadius =  8f;
         public const float DangerRadius   = 18f;
         public const float TenseRadius    = 35f;
+
+        private float _aggroRadius = TenseRadius;
 
         public ThreatZone  CurrentZone    { get; private set; } = ThreatZone.Safe;
         public float       NearestDist    { get; private set; } = float.MaxValue;
@@ -30,6 +32,8 @@ namespace BeamQuest.World
         private float _lastDist = float.MaxValue;
 
         public ThreatTracker(VehicleManager vehicles) => _vehicles = vehicles;
+
+        public void ApplyProfile(ThreatProfileConfig cfg) => _aggroRadius = cfg.AggroRadiusM;
 
         public void Update(Vector3 playerPos, float dt)
         {
@@ -67,7 +71,7 @@ namespace BeamQuest.World
                 <= ImpactRadius   => ThreatZone.Impact,
                 <= CriticalRadius => ThreatZone.Critical,
                 <= DangerRadius   => ThreatZone.Danger,
-                <= TenseRadius    => ThreatZone.Tense,
+                var d when d <= _aggroRadius => ThreatZone.Tense,
                 _                 => ThreatZone.Safe,
             };
 
@@ -98,7 +102,7 @@ namespace BeamQuest.World
         public float Intensity => CurrentZone switch
         {
             ThreatZone.Safe     => 0f,
-            ThreatZone.Tense    => MathEx.Lerp(0f,   0.35f, 1f - (NearestDist - DangerRadius)  / (TenseRadius - DangerRadius)),
+            ThreatZone.Tense    => MathEx.Lerp(0f,   0.35f, 1f - (NearestDist - DangerRadius)  / (_aggroRadius - DangerRadius)),
             ThreatZone.Danger   => MathEx.Lerp(0.35f, 0.7f, 1f - (NearestDist - CriticalRadius)/ (DangerRadius - CriticalRadius)),
             ThreatZone.Critical => MathEx.Lerp(0.7f,  0.95f,1f - (NearestDist - ImpactRadius)  / (CriticalRadius - ImpactRadius)),
             _                   => 1f,

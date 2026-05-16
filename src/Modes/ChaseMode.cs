@@ -54,6 +54,9 @@ namespace BeamQuest.Modes
 
         private bool _lastStart, _lastRestart;
 
+        public ThreatProfile ActiveProfile { get; private set; } = ThreatProfile.Truck;
+        public ThreatProfileConfig ActiveProfileConfig { get; private set; } = ThreatProfileConfig.Truck;
+
         // Spawn point — the vehicle starts facing this position in BeamNG
         private static readonly Vector3 SpawnPos = new(0f, 0f, 10f);
 
@@ -80,7 +83,20 @@ namespace BeamQuest.Modes
         {
             Player.Teleport(SpawnPos);
             EventBus.Publish(new ViewerModeChangedEvent(Name));
-            _log.LogInformation("Chase mode activated — wait for the engine...");
+            _log.LogInformation("Chase mode activated — profile: {Profile}", ActiveProfile);
+        }
+
+        /// <summary>
+        /// Switch the vehicle profile.  Safe to call between rounds.
+        /// </summary>
+        public void SetProfile(ThreatProfile profile)
+        {
+            ActiveProfile       = profile;
+            ActiveProfileConfig = ThreatProfileConfig.ForProfile(profile);
+            Threat.ApplyProfile(ActiveProfileConfig);
+            Environment.SetFogBias(ActiveProfileConfig.FogBias);
+            _log.LogInformation("Threat profile → {Name}", ActiveProfileConfig.DisplayName);
+            EventBus.Publish(new ThreatProfileChangedEvent(profile, ActiveProfileConfig));
         }
 
         public void Deactivate() { }

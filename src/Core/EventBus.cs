@@ -32,6 +32,9 @@ namespace BeamQuest.Core
     public readonly record struct ChaseStartedEvent;
     public readonly record struct ChaseRestartedEvent;
     public readonly record struct ChaseEscapedEvent(float SurvivalSeconds);
+    public readonly record struct ThreatProfileChangedEvent(
+        BeamQuest.World.ThreatProfile Profile,
+        BeamQuest.World.ThreatProfileConfig Config);
 
     // ── Bus ───────────────────────────────────────────────────────────────────
 

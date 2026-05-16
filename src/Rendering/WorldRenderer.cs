@@ -24,14 +24,18 @@ namespace BeamQuest.Rendering
         public float     _pad0, _pad1; //  8
     }
 
-    // Vignette overlay — 16 bytes
+    // Vignette / flash / overlay — 48 bytes, matches vignette.frag push_constant block
     [StructLayout(LayoutKind.Sequential, Pack = 4)]
     internal struct VignettePush
     {
-        public float Strength;
-        public float FlashAlpha;
-        public float Heartbeat;
-        public float _pad;
+        public float   Strength;      // offset  0
+        public float   FlashAlpha;    // offset  4
+        public float   Heartbeat;     // offset  8
+        public float   OverlayAlpha;  // offset 12
+        public Vector3 FlashColor;    // offset 16
+        public float   _pad0;         // offset 28
+        public Vector3 OverlayColor;  // offset 32
+        public float   _pad1;         // offset 44
     }
 
     public sealed unsafe class WorldRenderer : IDisposable
@@ -133,7 +137,7 @@ namespace BeamQuest.Rendering
             DrawVehicles(cmd, viewProj, fogVec4, fogDensity);
 
             if (hud != null)
-                DrawVignette(cmd, hud.VignetteStrength, hud.FlashAlpha, hud.HeartbeatPulse);
+                DrawVignette(cmd, hud);
         }
 
         // ── Terrain ───────────────────────────────────────────────────────────
@@ -322,15 +326,25 @@ namespace BeamQuest.Rendering
 
         // ── Vignette (fullscreen overlay) ─────────────────────────────────────
 
-        private void DrawVignette(CommandBuffer cmd, float strength, float flash, float hb)
+        private void DrawVignette(CommandBuffer cmd, ChaseHUD hud)
         {
-            if (strength < 0.01f && flash < 0.01f && hb < 0.01f) return;
+            float overlayA = hud.ShowOverlay ? hud.OverlayAlpha : 0f;
+            if (hud.VignetteStrength < 0.01f && hud.FlashAlpha < 0.01f &&
+                hud.HeartbeatPulse < 0.01f && overlayA < 0.01f) return;
 
             _vk.Vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, _vignettePipeline);
-            var push = new VignettePush { Strength = strength, FlashAlpha = flash, Heartbeat = hb };
+            var push = new VignettePush
+            {
+                Strength     = hud.VignetteStrength,
+                FlashAlpha   = hud.FlashAlpha,
+                Heartbeat    = hud.HeartbeatPulse,
+                OverlayAlpha = overlayA,
+                FlashColor   = hud.FlashColor,
+                OverlayColor = new Vector3(0.04f, 0.04f, 0.04f),
+            };
             _vk.Vk.CmdPushConstants(cmd, _vignetteLayout,
                 ShaderStageFlags.FragmentBit, 0, (uint)sizeof(VignettePush), &push);
-            _vk.Vk.CmdDraw(cmd, 3, 1, 0, 0);  // fullscreen triangle from gl_VertexIndex
+            _vk.Vk.CmdDraw(cmd, 3, 1, 0, 0);
         }
 
         // ── Pipeline creation ─────────────────────────────────────────────────
