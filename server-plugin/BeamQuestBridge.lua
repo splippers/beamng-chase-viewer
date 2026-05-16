@@ -1,20 +1,26 @@
 --[[
-  BeamQuestBridge.lua — BeamMP Server Plugin
-  ============================================
-  Streams live vehicle states to connected BeamQuest viewers via WebSocket.
+  BeamQuestBridge.lua — BeamMP Server Plugin + BeamNG Client Mod
+  ===============================================================
+  TWO roles in one file:
 
-  Install:
-    Copy this file to <BeamMP-Server>/Resources/Server/BeamQuestBridge/main.lua
+  1. SERVER PLUGIN (BeamMP)
+     Receives vehicle states from BeamMP clients and streams them to Quest 3
+     viewers via WebSocket on port 37421.
 
-  This plugin runs on the BeamMP SERVER.  It receives vehicle-state packets
-  from all connected clients and re-broadcasts them as JSON to any WebSocket
-  listener (your Quest 3 running BeamQuestViewer).
+     Install: <BeamMP-Server>/Resources/Server/BeamQuestBridge/main.lua
+
+  2. CHASE MODE AI (BeamNG client mod)
+     Receives the Quest player's world position via UDP on port 37421 and
+     uses BeamNG's AI system to steer the chaser vehicle toward them.
+     Also handles the client snippet that sends vehicle telemetry upstream.
+
+     Install: <BeamNG>/mods/BeamQuestBridge/ (as a BeamNG mod)
 
   Architecture:
-    BeamNG game → BeamMP client mod → BeamMP server → [this plugin] → Quest 3
+    Quest 3 ──(UDP pos)──► BeamNG mod ──► AI steers vehicle
+    BeamNG mod ──(UDP states)──► Quest 3 viewer
 
-  The WebSocket server listens on port 37421 by default.
-  Override with env var BQ_WS_PORT.
+  Override ports with env vars BQ_WS_PORT, BQ_POS_PORT.
 --]]
 
 local M           = {}
@@ -22,12 +28,18 @@ local json        = require("json")
 local socket      = require("socket")
 
 -- ── Config ──────────────────────────────────────────────────────────────────
-local WS_PORT     = tonumber(os.getenv("BQ_WS_PORT")) or 37421
+local WS_PORT     = tonumber(os.getenv("BQ_WS_PORT"))  or 37421
+local POS_PORT    = tonumber(os.getenv("BQ_POS_PORT")) or 37421  -- receives player pos
+local STATE_PORT  = tonumber(os.getenv("BQ_STATE_PORT")) or 37420 -- sends vehicle states
 local TICK_RATE   = 1 / 20   -- 20 Hz broadcast
 local MAX_CLIENTS = 8
 
 -- ── State ───────────────────────────────────────────────────────────────────
-local vehicleStates = {}  -- [vehicleId] → state table
+local vehicleStates  = {}  -- [vehicleId] → state table
+local playerPos      = nil -- last received player position from Quest
+local posUdp         = nil -- UDP socket for receiving player position (BeamNG mod side)
+local stateUdp       = nil -- UDP socket for sending states (BeamNG mod side)
+local questAddr      = nil -- Quest 3 IP:port to send states to
 local wsClients     = {}  -- list of connected WebSocket client sockets
 local wsServer      = nil
 local lastBroadcast = 0
@@ -150,38 +162,96 @@ function M.onUpdate(dt)
   broadcast(json.encode(frame))
 end
 
--- ── BeamNG client-side Lua helper (attach to vehicle via mod) ────────────────
---[[
-  The server only receives what the client sends.  To stream full telemetry
-  (rpm, fuel, etc.) you also need a BeamNG client mod that sends these values.
+-- ── BeamNG mod entry points (when loaded as a BeamNG client mod) ─────────────
 
-  Drop this snippet in your BeamNG mod's onUpdate:
+-- Called by BeamNG when the mod loads
+function M.onInit()
+  -- Open UDP socket to receive player position from Quest
+  posUdp = socket.udp()
+  posUdp:setsockname("*", POS_PORT)
+  posUdp:settimeout(0)
 
-    local function onUpdate(dt)
-      local v = be:getPlayerVehicle(0)
-      if not v then return end
-      local pos = v:getPosition()
-      local rot = v:getRotation()
-      local vel = v:getVelocity()
-      local electrics = v.electrics
+  -- Open UDP socket to send vehicle states to Quest
+  stateUdp = socket.udp()
+  stateUdp:settimeout(0)
 
-      local data = jsonEncode({
-        model = v.jbeam,
-        px=pos.x, py=pos.y, pz=pos.z,
-        rx=rot.x, ry=rot.y, rz=rot.z, rw=rot.w,
-        vx=vel.x, vy=vel.y, vz=vel.z,
-        spd = v:getGroundSpeed(),
-        rpm = electrics.rpmspin or 0,
-        gear = electrics.gear_index or 0,
-        fuel = electrics.fuel or 1,
-        thr  = electrics.throttle or 0,
-        brk  = electrics.brake or 0,
-        str  = electrics.steering or 0,
-        dmg  = v:getDamage() or 0,
-      })
-      -- BeamMP will relay this to the server's onVehicleEdited
-      TriggerServerEvent("BeamQuestBridge:vehicleUpdate", data)
+  -- Quest address: set BQ_QUEST_IP or default to broadcast
+  local questIp = os.getenv("BQ_QUEST_IP") or "255.255.255.255"
+  questAddr = { ip = questIp, port = STATE_PORT }
+
+  print("[BeamQuestBridge] BeamNG mod active — Chase mode ready")
+  print("[BeamQuestBridge] Listening for player pos on UDP :" .. POS_PORT)
+  print("[BeamQuestBridge] Sending states to " .. questIp .. ":" .. STATE_PORT)
+end
+
+-- Called every BeamNG game tick
+function M.onUpdate(dt)
+  -- ── Receive player position from Quest ────────────────────────────────────
+  if posUdp then
+    local data, ip, port = posUdp:receivefrom()
+    if data then
+      local ok, decoded = pcall(json.decode, data)
+      if ok and decoded then
+        playerPos = decoded
+        questAddr = { ip = ip, port = STATE_PORT }  -- remember Quest's IP
+      end
     end
---]]
+  end
+
+  -- ── Steer AI toward player position ──────────────────────────────────────
+  if playerPos then
+    local chaser = be:getPlayerVehicle(0)
+    if chaser then
+      local ai = chaser.ai
+      if ai then
+        -- Set AI to chase the player's world position
+        ai:setMode("span")
+        ai:setTargetPosition(playerPos.px, playerPos.py, playerPos.pz)
+        ai:setAggression(1.0)  -- maximum aggression
+        ai:setSpeedMode("limit")
+        ai:setSpeed(40)        -- 40 m/s max (~144 km/h) — terrifying
+      end
+    end
+  end
+
+  -- ── Broadcast all vehicle states to Quest ─────────────────────────────────
+  lastBroadcast = (lastBroadcast or 0) + dt
+  if lastBroadcast < TICK_RATE then return end
+  lastBroadcast = 0
+
+  if not stateUdp or not questAddr then return end
+
+  local vehicles = {}
+  local count    = be:getObjectCount()
+  for i = 0, count - 1 do
+    local obj = be:getObject(i)
+    if obj and obj:getType() == "BeamNGVehicle" then
+      local pos = obj:getPosition()
+      local rot = obj:getRotation()
+      local vel = obj:getVelocity()
+      local el  = obj.electrics or {}
+
+      table.insert(vehicles, {
+        id    = tostring(obj:getId()),
+        name  = obj:getName() or ("Vehicle" .. obj:getId()),
+        model = obj.jbeam or "unknown",
+        px = pos.x, py = pos.y, pz = pos.z,
+        rx = rot.x, ry = rot.y, rz = rot.z, rw = rot.w,
+        vx = vel.x, vy = vel.y, vz = vel.z,
+        spd  = obj:getGroundSpeed() or 0,
+        rpm  = el.rpmspin or 0,
+        gear = el.gear_index or 0,
+        fuel = el.fuel or 1,
+        thr  = el.throttle or 0,
+        brk  = el.brake or 0,
+        str  = el.steering or 0,
+        dmg  = 0,
+      })
+    end
+  end
+
+  local frame   = json.encode({ t = os.clock(), vs = vehicles })
+  stateUdp:sendto(frame, questAddr.ip, questAddr.port)
+end
 
 return M

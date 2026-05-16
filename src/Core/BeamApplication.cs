@@ -4,8 +4,6 @@ using BeamQuest.UI;
 using BeamQuest.World;
 using Microsoft.Extensions.Logging;
 
-// XR + Rendering shared from the same Vulkan layer (copy from SLQuest.src)
-// See: BeamQuestViewer.csproj shared compile items
 using BeamQuest.XR;
 using BeamQuest.Rendering;
 
@@ -27,6 +25,7 @@ namespace BeamQuest.Core
         public UIManager        UI         { get; }
         public SpectatorMode    Spectator  { get; }
         public CockpitMode      Cockpit    { get; }
+        public ChaseMode        Chase      { get; }
         public IViewerMode      ActiveMode { get; private set; }
 
         private IVehicleDataSource? _source;
@@ -44,7 +43,17 @@ namespace BeamQuest.Core
             Terrain   = new TerrainLoader(logFactory.CreateLogger<TerrainLoader>());
             Spectator = new SpectatorMode(Vehicles);
             Cockpit   = new CockpitMode(Vehicles);
-            ActiveMode = Spectator;
+
+            // PlayerPositionBroadcaster — sends player pos to BeamNG AI (port 37421)
+            var posHost     = Environment.GetEnvironmentVariable("BQ_HOST") ?? "192.168.1.1";
+            var broadcaster = new Protocol.PlayerPositionBroadcaster(
+                posHost, 37421, logFactory.CreateLogger<Protocol.PlayerPositionBroadcaster>());
+            Chase     = new ChaseMode(Vehicles, Terrain, broadcaster,
+                                      logFactory.CreateLogger<ChaseMode>());
+
+            // Default to Chase mode when BQ_MODE=chase, otherwise Spectator
+            bool chaseDefault = System.Environment.GetEnvironmentVariable("BQ_MODE") == "chase";
+            ActiveMode = chaseDefault ? (IViewerMode)Chase : Spectator;
 
             Swapchain  = new SwapchainRenderer(xr, vulkan);
             UI         = new UIManager(Vehicles, ActiveMode, logFactory.CreateLogger<UIManager>());
@@ -145,10 +154,25 @@ namespace BeamQuest.Core
             }
             else if (ActiveMode is CockpitMode ck)
             {
-                var (_, fState) = XR.WaitFrame();
                 var views = XR.LocateViews();
                 if (views.Count > 0)
                     ck.HeadViewMatrix = views[0].ViewMatrix;
+            }
+            else if (ActiveMode is ChaseMode ch)
+            {
+                var views = XR.LocateViews();
+                if (views.Count > 0)
+                {
+                    // Extract head rotation from the view matrix
+                    Matrix4x4.Invert(views[0].ViewMatrix, out var inv);
+                    ch.HeadRotation = Quaternion.CreateFromRotationMatrix(inv);
+                }
+                ch.MoveAxis   = right.ThumbstickAxis;
+                ch.YawDelta   = -left.ThumbstickAxis.X * 1.2f * dt;
+                ch.Sprint     = right.GripValue > 0.5f;
+                ch.Crouch     = left.GripValue  > 0.5f;
+                ch.StartBtn   = right.ButtonA;
+                ch.RestartBtn = right.ButtonB;
             }
         }
 

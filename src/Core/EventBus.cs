@@ -24,6 +24,14 @@ namespace BeamQuest.Core
     public readonly record struct NotificationEvent(string Message, float Duration);
     public readonly record struct FollowTargetChangedEvent(string? VehicleId);
 
+    // Chase mode — threat proximity
+    public enum ThreatZone { Safe, Tense, Danger, Critical, Impact }
+    public readonly record struct ThreatZoneChangedEvent(ThreatZone Zone, float Distance);
+    public readonly record struct ThreatImpactEvent(string VehicleId, float SpeedMs);
+    public readonly record struct PlayerCaughtEvent(float SurvivalSeconds);
+    public readonly record struct ChaseStartedEvent;
+    public readonly record struct ChaseRestartedEvent;
+
     // ── Bus ───────────────────────────────────────────────────────────────────
 
     public static class EventBus
