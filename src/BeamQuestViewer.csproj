@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-android</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ApplicationId>com.beamquest.viewer</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <AndroidManifest>../android/app/src/main/AndroidManifest.xml</AndroidManifest>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishTrimmed>false</PublishTrimmed>
+    <RunAOTCompilation>false</RunAOTCompilation>
+  </PropertyGroup>
+
+  <!-- Silk.NET: OpenXR + Vulkan bindings -->
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.OpenXR"                    Version="2.22.0" />
+    <PackageReference Include="Silk.NET.OpenXR.Extensions.EXT"    Version="2.22.0" />
+    <PackageReference Include="Silk.NET.OpenXR.Extensions.FB"     Version="2.22.0" />
+    <PackageReference Include="Silk.NET.OpenXR.Extensions.META"   Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Vulkan"                    Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR"    Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Maths"                     Version="2.22.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>
