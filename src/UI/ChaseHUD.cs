@@ -25,13 +25,15 @@ namespace BeamQuest.UI
 
         // ── Readable by renderer ─────────────────────────────────────────────
 
-        public float HeartbeatPulse  => _audio.HeartbeatPulse;
-        public float ThreatIntensity => _threat.Intensity;
-        public float ThreatBearing   => _audio.DirectionAngle;
-        public float StaminaFraction => _player.Stamina;
-        public bool  ShowStamina     => _player.IsSprinting || _player.Stamina < 0.5f;
-        public float SurvivalSeconds => _state.SurvivalSeconds;
-        public ChasePhase Phase      => _state.Phase;
+        public float      HeartbeatPulse  => _audio.HeartbeatPulse;
+        public float      ThreatIntensity => _threat.Intensity;
+        public float      ThreatBearing   => _audio.DirectionAngle;
+        public float      StaminaFraction => _player.Stamina;
+        public bool       ShowStamina     => _player.IsSprinting || _player.Stamina < 0.5f;
+        public float      SurvivalSeconds => _state.SurvivalSeconds;
+        public ChasePhase Phase           => _state.Phase;
+        public Vector3    PlayerPosition  => _player.Position;
+        public Quaternion PlayerRotation  => _player.Rotation;
 
         // Vignette (motion sickness mitigation + threat atmosphere)
         public float VignetteStrength { get; private set; }

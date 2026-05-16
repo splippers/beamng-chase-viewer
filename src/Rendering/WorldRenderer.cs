@@ -594,30 +594,75 @@ namespace BeamQuest.Rendering
         private void DrawBeaconCompass(CommandBuffer cmd, Matrix4x4 proj,
             ChaseHUD hud, float w, float h)
         {
-            // Skip when overlay is showing — compass is distracting during end screen
+            // Skip during end-screen overlays — compass is distracting there
             if (hud.ShowOverlay && hud.OverlayAlpha > 0.5f) return;
 
-            // ThreatBearing is the bearing TO the vehicle; the beacon direction is a fixed
-            // angle from the player's perspective computed by ChaseHUD.  We approximate
-            // the beacon compass using ThreatBearing as a placeholder.
-            // The actual direction comes from the world-space bearing of BeaconPosition
-            // vs Player.Position — ChaseHUD exposes ThreatBearing for the threat arrow.
-            // For the beacon we use a static indicator at the top of the screen.
+            // Compute world-space bearing from player to beacon, then make it relative
+            // to the player's current facing direction so the arrow turns with them.
+            var toBeacon = ProceduralEnvironment.BeaconPosition - hud.PlayerPosition;
+            float worldAngle  = MathF.Atan2(toBeacon.X, toBeacon.Z); // angle in world XZ
+            float playerYaw   = ExtractYaw(hud.PlayerRotation);
+            float relBearing  = worldAngle - playerYaw;
+            float dist        = toBeacon.Length();
+
             float compassR = 48f;
-            float cx = w * 0.5f, cy = compassR + 12f;
+            float cx = w * 0.5f, cy = compassR + 14f;
 
-            // Ring background
-            DrawSolidQuad(cmd, proj, cx - compassR, cy - compassR,
-                compassR * 2, compassR * 2,
-                new Vector4(0.05f, 0.35f, 0.3f, 0.45f));
+            // Background disc (square — actual disc shaping via the geometry)
+            DrawSolidQuad(cmd, proj,
+                cx - compassR, cy - compassR, compassR * 2, compassR * 2,
+                new Vector4(0.04f, 0.08f, 0.12f, 0.72f));
 
-            // "BEACON" label
-            float labScale = 1.4f;
-            string lab = "BEACON";
-            float labW = lab.Length * CellW * labScale;
-            DrawText(cmd, proj, lab,
-                cx - labW * 0.5f, cy - CellH * labScale * 0.5f, labScale,
-                new Vector4(0.1f, 1f, 0.85f, 0.9f));
+            // Direction arrow: filled triangle rotated by relBearing, tip points toward beacon.
+            // Local space: tip at (0,-arrowR), base corners at (±arrowW, +baseY).
+            // +Y is screen-down in this coord system.
+            const float arrowR  = 32f; // half-length of arrow along its axis
+            const float arrowW  = 12f; // half-width of arrow at base
+            float sinA = MathF.Sin(relBearing), cosA = MathF.Cos(relBearing);
+
+            // Rotate local point (lx, ly) around compass centre
+            (float x, float y) Rot(float lx, float ly)
+                => (cx + lx * cosA - ly * sinA,
+                    cy + lx * sinA + ly * cosA);
+
+            var tip = Rot(0f,      -arrowR);
+            var lb  = Rot(-arrowW, +arrowR * 0.5f);
+            var rb  = Rot(+arrowW, +arrowR * 0.5f);
+            // Notch in the tail to make it a chevron
+            var nb  = Rot(0f,      +arrowR * 0.2f);
+
+            // Two triangles: tip→lb→nb and tip→nb→rb
+            var cyan = new Vector4(0.10f, 0.95f, 0.80f, 0.92f);
+            float[] tri1 = {
+                tip.x, tip.y, 0, 0.5f, 0.5f,
+                lb.x,  lb.y,  0, 0.5f, 0.5f,
+                nb.x,  nb.y,  0, 0.5f, 0.5f,
+            };
+            float[] tri2 = {
+                tip.x, tip.y, 0, 0.5f, 0.5f,
+                nb.x,  nb.y,  0, 0.5f, 0.5f,
+                rb.x,  rb.y,  0, 0.5f, 0.5f,
+            };
+            UploadAndDrawHud(cmd, proj, tri1, cyan, _whiteDescSet, 1, 1, 0, 0);
+            UploadAndDrawHud(cmd, proj, tri2, cyan, _whiteDescSet, 1, 1, 0, 0);
+
+            // Distance label below the compass
+            string distLabel = dist < 1000f
+                ? $"{(int)dist}M"
+                : $"{dist / 1000f:F1}KM";
+            float labScale = 1.2f;
+            float labW     = distLabel.Length * CellW * labScale;
+            DrawText(cmd, proj, distLabel,
+                cx - labW * 0.5f, cy + compassR + 4f, labScale,
+                new Vector4(0.55f, 0.90f, 0.80f, 0.85f));
+        }
+
+        // Extract the Y-axis (yaw) angle from a quaternion (rotation around world up).
+        private static float ExtractYaw(Quaternion q)
+        {
+            float siny = 2f * (q.W * q.Y + q.Z * q.X);
+            float cosy = 1f - 2f * (q.Y * q.Y + q.Z * q.Z);
+            return MathF.Atan2(siny, cosy);
         }
 
         private void DrawSolidQuad(CommandBuffer cmd, Matrix4x4 proj,
