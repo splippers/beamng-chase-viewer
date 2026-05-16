@@ -11,8 +11,10 @@ layout(push_constant) uniform PC {
     vec3  flashColor;       // offset 16  (16-byte aligned)
     float _pad0;            // offset 28
     vec3  overlayColor;     // offset 32  (16-byte aligned)
-    float _pad1;            // offset 44
-} pc;                       // total 48 bytes
+    float stamina;          // offset 44  — 0..1; bar drawn when < 1
+    float showStamina;      // offset 48  — 0 or 1 (float bool)
+    float _pad1, _pad2;     // offset 52, 56
+} pc;                       // total 60 bytes (rounded to 64)
 
 void main() {
     vec2  centred = fragUV * 2.0 - 1.0;
@@ -34,4 +36,11 @@ void main() {
     base = mix(base, vec4(pc.overlayColor, 1.0), pc.overlayAlpha);
 
     outColor = base;
+
+    // Stamina bar: thin strip at bottom, green → amber → red, visible when active
+    if (pc.showStamina > 0.5 && fragUV.y > 0.935 && fragUV.y < 0.965) {
+        float filled = step(fragUV.x, 0.03 + pc.stamina * 0.94);
+        vec3  barCol = mix(vec3(1.0, 0.25, 0.0), vec3(0.0, 0.9, 0.2), pc.stamina);
+        outColor     = mix(outColor, vec4(barCol, 1.0), filled * 0.88);
+    }
 }

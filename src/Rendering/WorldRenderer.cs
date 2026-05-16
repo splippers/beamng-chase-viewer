@@ -24,7 +24,7 @@ namespace BeamQuest.Rendering
         public float     _pad0, _pad1; //  8
     }
 
-    // Vignette / flash / overlay — 48 bytes, matches vignette.frag push_constant block
+    // Vignette / flash / overlay / stamina bar — 64 bytes, matches vignette.frag
     [StructLayout(LayoutKind.Sequential, Pack = 4)]
     internal struct VignettePush
     {
@@ -35,7 +35,11 @@ namespace BeamQuest.Rendering
         public Vector3 FlashColor;    // offset 16
         public float   _pad0;         // offset 28
         public Vector3 OverlayColor;  // offset 32
-        public float   _pad1;         // offset 44
+        public float   Stamina;       // offset 44
+        public float   ShowStamina;   // offset 48  (1f = visible)
+        public float   _pad1;         // offset 52
+        public float   _pad2;         // offset 56
+        public float   _pad3;         // offset 60
     }
 
     public sealed unsafe class WorldRenderer : IDisposable
@@ -245,9 +249,19 @@ namespace BeamQuest.Rendering
                 var gpu = _vehicleGpu[id];
 
                 // Rebuild GPU buffer if wheel heights changed (deformation / suspension)
-                bool rebuild = gpu.LastWheelHeights == null ||
-                    v.WheelHeights == null && gpu.LastWheelHeights != null ||
-                    (v.WheelHeights != null && !v.WheelHeights.SequenceEqual(gpu.LastWheelHeights ?? []));
+                // Only rebuild if any wheel moved more than 5 mm — filters suspension
+                // micro-jitter that would otherwise re-allocate GPU buffers every frame.
+                const float RebuildThreshold = 0.005f;
+                bool rebuild = (gpu.LastWheelHeights == null) != (v.WheelHeights == null);
+                if (!rebuild && v.WheelHeights != null && gpu.LastWheelHeights != null)
+                {
+                    int n = Math.Min(v.WheelHeights.Length, gpu.LastWheelHeights.Length);
+                    for (int i = 0; i < n; i++)
+                    {
+                        if (MathF.Abs(v.WheelHeights[i] - gpu.LastWheelHeights[i]) > RebuildThreshold)
+                        { rebuild = true; break; }
+                    }
+                }
 
                 if (rebuild)
                 {
@@ -341,6 +355,8 @@ namespace BeamQuest.Rendering
                 OverlayAlpha = overlayA,
                 FlashColor   = hud.FlashColor,
                 OverlayColor = new Vector3(0.04f, 0.04f, 0.04f),
+                Stamina      = hud.StaminaFraction,
+                ShowStamina  = hud.ShowStamina ? 1f : 0f,
             };
             _vk.Vk.CmdPushConstants(cmd, _vignetteLayout,
                 ShaderStageFlags.FragmentBit, 0, (uint)sizeof(VignettePush), &push);
