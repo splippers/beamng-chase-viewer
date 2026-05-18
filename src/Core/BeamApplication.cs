@@ -171,12 +171,13 @@ namespace BeamQuest.Core
                     Matrix4x4.Invert(views[0].ViewMatrix, out var inv);
                     ch.HeadRotation = Quaternion.CreateFromRotationMatrix(inv);
                 }
-                ch.MoveAxis   = right.ThumbstickAxis;
-                ch.YawDelta   = -left.ThumbstickAxis.X * 1.2f * dt;
-                ch.Sprint     = right.GripValue > 0.5f;
-                ch.Crouch     = left.GripValue  > 0.5f;
-                ch.StartBtn   = right.ButtonA;
-                ch.RestartBtn = right.ButtonB;
+                ch.MoveAxis        = right.ThumbstickAxis;
+                ch.YawDelta        = -left.ThumbstickAxis.X * 1.2f * dt;
+                ch.Sprint          = right.GripValue > 0.5f;
+                ch.Crouch          = left.GripValue  > 0.5f;
+                ch.StartBtn        = right.ButtonA;
+                ch.RestartBtn      = right.ButtonB;
+                ch.ProfileCycleBtn = right.ThumbstickClick;
 
                 // Haptics: ground rumble (omnidirectional) + heartbeat + directional cue.
                 float rumble  = ch.Audio.GroundRumble;

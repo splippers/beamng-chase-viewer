@@ -45,14 +45,15 @@ namespace BeamQuest.Modes
         public Quaternion HeadRotation { private get; set; } = Quaternion.Identity;
 
         // Controller input — set each frame by BeamApplication
-        public Vector2 MoveAxis  { private get; set; }
-        public float   YawDelta  { private get; set; }
-        public bool    Sprint    { private get; set; }
-        public bool    Crouch    { private get; set; }
-        public bool    StartBtn  { private get; set; }
-        public bool    RestartBtn{ private get; set; }
+        public Vector2 MoveAxis        { private get; set; }
+        public float   YawDelta        { private get; set; }
+        public bool    Sprint          { private get; set; }
+        public bool    Crouch          { private get; set; }
+        public bool    StartBtn        { private get; set; }
+        public bool    RestartBtn      { private get; set; }
+        public bool    ProfileCycleBtn { private get; set; }  // right thumbstick click
 
-        private bool _lastStart, _lastRestart;
+        private bool _lastStart, _lastRestart, _lastProfileCycle;
 
         public ThreatProfile ActiveProfile { get; private set; } = ThreatProfile.Truck;
         public ThreatProfileConfig ActiveProfileConfig { get; private set; } = ThreatProfileConfig.Truck;
@@ -140,8 +141,22 @@ namespace BeamQuest.Modes
                     GameState.StartRound();
                 }
             }
-            _lastStart   = StartBtn;
-            _lastRestart = RestartBtn;
+            if (ProfileCycleBtn && !_lastProfileCycle)
+            {
+                var next = ActiveProfile switch
+                {
+                    ThreatProfile.Truck          => ThreatProfile.Bus,
+                    ThreatProfile.Bus            => ThreatProfile.CursedForklift,
+                    ThreatProfile.CursedForklift => ThreatProfile.Truck,
+                    _                            => ThreatProfile.Truck,
+                };
+                SetProfile(next);
+                EventBus.Publish(new NotificationEvent(
+                    $"PROFILE: {ActiveProfileConfig.DisplayName}", 2.5f));
+            }
+            _lastStart         = StartBtn;
+            _lastRestart       = RestartBtn;
+            _lastProfileCycle  = ProfileCycleBtn;
         }
 
         private void OnCaught(PlayerCaughtEvent e)
